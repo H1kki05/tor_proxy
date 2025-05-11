@@ -1,18 +1,26 @@
 #!/bin/sh
-# Generate a minimal torrc at container start so we can pick up $PORT
+set -e
+
+# 1️⃣ Write a minimal torrc at container start
 cat <<EOF >/etc/tor/torrc
-# Don’t fork; keep in foreground so Docker can manage it
+# Don’t fork; let Docker manage the process
 RunAsDaemon 0
 
-# Where Tor stores its state
+# Persistent state
 DataDirectory /var/lib/tor
 
-# Listen on all interfaces at the port Render provides (default 9050)
+# Listen on whatever PORT Render injects (default 9050)
 SocksPort 0.0.0.0:${PORT:-9050}
 
-# Log notices to stdout for debugging
+# Log to stdout
 Log notice stdout
 EOF
 
-# Execute Tor with our generated config
-exec tor -f /etc/tor/torrc
+# 2️⃣ Ensure permissions match the user Tor will run as
+chown -R debian-tor:debian-tor /var/lib/tor /etc/tor/torrc
+
+# 3️⃣ Exec Tor under debian-tor
+exec start-stop-daemon \
+     --start --quiet \
+     --chuid debian-tor:debian-tor \
+     --exec /usr/bin/tor -- -f /etc/tor/torrc
